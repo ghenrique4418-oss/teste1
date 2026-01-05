@@ -1,0 +1,586 @@
+-- Script: Aimbot GUI Avançado - Prison Life Edition
+-- Descrição: Interface gráfica estilo mobile com tema laranja/branco de Prison Life
+-- Recursos: Time Check para evitar amigos, toggle para ativar/desativar
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Camera = workspace.CurrentCamera
+
+local LocalPlayer = Players.LocalPlayer
+
+-- CONFIGURAÇÕES
+local AIM_KEY = Enum.KeyCode.V
+local SMOOTHNESS = 0.18
+local MAX_DISTANCE = 1000
+
+-- VARIÁVEIS
+local Enabled = false
+local Connection = nil
+local FOV = 50
+local TeamCheckEnabled = true -- Novo: Time Check ativo por padrão
+
+-- CORES DO TEMA PRISON LIFE
+local COLORS = {
+    Background = Color3.fromRGB(240, 240, 240),    -- Branco
+    Secondary = Color3.fromRGB(255, 165, 0),       -- Laranja
+    Accent = Color3.fromRGB(220, 120, 0),          -- Laranja escuro
+    ButtonOn = Color3.fromRGB(46, 204, 113),       -- Verde
+    ButtonOff = Color3.fromRGB(231, 76, 60),       -- Vermelho
+    Text = Color3.fromRGB(50, 50, 50),             -- Cinza escuro
+    TextSecondary = Color3.fromRGB(100, 100, 100), -- Cinza médio
+    DragArea = Color3.fromRGB(255, 180, 0),        -- Laranja claro
+    Border = Color3.fromRGB(200, 200, 200),        -- Cinza claro
+    TeamCheckOn = Color3.fromRGB(52, 152, 219),    -- Azul para Team Check ativo
+    TeamCheckOff = Color3.fromRGB(149, 165, 166)   -- Cinza para Team Check inativo
+}
+
+-- ================= FUNÇÃO TEAM CHECK =================
+
+local function isEnemy(player)
+    if not TeamCheckEnabled then
+        return true -- Se Team Check estiver desativado, considera todos como inimigos
+    end
+    
+    local localTeam = LocalPlayer.Team
+    local targetTeam = player.Team
+    
+    -- Verifica se ambos têm times
+    if localTeam and targetTeam then
+        -- Se forem do mesmo time, não é inimigo
+        if localTeam == targetTeam then
+            return false
+        end
+    end
+    
+    return true -- É inimigo
+end
+
+-- ================= FUNÇÕES DE TARGET =================
+
+local function getClosestInFov()
+    local closest = nil
+    local closestDist = math.huge
+    local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local fovRadius = (FOV / 100) * (Camera.ViewportSize.X / 2)
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            -- Verifica se é inimigo usando Team Check
+            if isEnemy(plr) then
+                local char = plr.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    local root = char:FindFirstChild("HumanoidRootPart")
+
+                    if hum and root and hum.Health > 0 then
+                        local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
+                        if onScreen then
+                            local dist = (Vector2.new(pos.X, pos.Y) - screenCenter).Magnitude
+                            if dist <= fovRadius then
+                                local mag = (Camera.CFrame.Position - root.Position).Magnitude
+                                if mag < closestDist and mag < MAX_DISTANCE then
+                                    closestDist = mag
+                                    closest = root
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closest
+end
+
+-- ================= FUNÇÕES DO AIMBOT =================
+
+local function start()
+    if Connection then Connection:Disconnect() end
+
+    Connection = RunService.RenderStepped:Connect(function()
+        if not Enabled then return end
+
+        local target = getClosestInFov()
+        if target then
+            local cf = CFrame.new(Camera.CFrame.Position, target.Position)
+            Camera.CFrame = Camera.CFrame:Lerp(cf, SMOOTHNESS)
+        end
+    end)
+end
+
+local function stop()
+    if Connection then
+        Connection:Disconnect()
+        Connection = nil
+    end
+end
+
+local function toggle()
+    Enabled = not Enabled
+
+    if Enabled then
+        start()
+        ToggleButton.Text = "🔫 AIMBOT ATIVADO"
+        ToggleButton.BackgroundColor3 = COLORS.ButtonOn
+        
+        -- Animação do botão
+        local tween = TweenService:Create(ToggleButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            BackgroundColor3 = COLORS.ButtonOn,
+            TextColor3 = Color3.fromRGB(255, 255, 255)
+        })
+        tween:Play()
+    else
+        stop()
+        ToggleButton.Text = "🔒 AIMBOT DESATIVADO"
+        ToggleButton.BackgroundColor3 = COLORS.ButtonOff
+        
+        -- Animação do botão
+        local tween = TweenService:Create(ToggleButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            BackgroundColor3 = COLORS.ButtonOff,
+            TextColor3 = Color3.fromRGB(255, 255, 255)
+        })
+        tween:Play()
+    end
+end
+
+-- ================= FUNÇÃO TEAM CHECK TOGGLE =================
+
+local function toggleTeamCheck()
+    TeamCheckEnabled = not TeamCheckEnabled
+    
+    if TeamCheckEnabled then
+        TeamCheckButton.Text = "✅ IGNORAR AMIGOS"
+        TeamCheckButton.BackgroundColor3 = COLORS.TeamCheckOn
+        
+        -- Animação do botão
+        local tween = TweenService:Create(TeamCheckButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            BackgroundColor3 = COLORS.TeamCheckOn,
+            TextColor3 = Color3.fromRGB(255, 255, 255)
+        })
+        tween:Play()
+        
+        print("🎯 Team Check: ATIVADO - Aimbot ignorará players do seu time")
+    else
+        TeamCheckButton.Text = "❌ ATIRAR EM TODOS"
+        TeamCheckButton.BackgroundColor3 = COLORS.TeamCheckOff
+        
+        -- Animação do botão
+        local tween = TweenService:Create(TeamCheckButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            BackgroundColor3 = COLORS.TeamCheckOff,
+            TextColor3 = Color3.fromRGB(255, 255, 255)
+        })
+        tween:Play()
+        
+        print("🎯 Team Check: DESATIVADO - Aimbot mirará em todos os players")
+    end
+end
+
+-- ================= CONSTRUÇÃO DA GUI =================
+
+local CoreGui = game:GetService("CoreGui")
+local Parent = (gethui and gethui()) or CoreGui
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "PrisonLifeAimbotGUI"
+Gui.ResetOnSpawn = false
+Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+Gui.Parent = Parent
+
+-- Frame principal
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 320, 0, 440) -- Aumentado para acomodar novo botão
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -220)
+MainFrame.BackgroundColor3 = COLORS.Background
+MainFrame.BackgroundTransparency = 0
+MainFrame.BorderSizePixel = 1
+MainFrame.BorderColor3 = COLORS.Border
+MainFrame.Parent = Gui
+
+-- Cantos arredondados
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 16)
+Corner.Parent = MainFrame
+
+-- Barra de título superior
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 50)
+TopBar.BackgroundColor3 = COLORS.Secondary
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
+
+local TopBarCorner = Instance.new("UICorner")
+TopBarCorner.CornerRadius = UDim.new(0, 16, 0, 0)
+TopBarCorner.Parent = TopBar
+
+-- Ícone do menu
+local MenuIcon = Instance.new("ImageLabel")
+MenuIcon.Size = UDim2.new(0, 30, 0, 30)
+MenuIcon.Position = UDim2.new(0, 15, 0.5, -15)
+MenuIcon.Image = "rbxassetid://3926305904"
+MenuIcon.ImageRectOffset = Vector2.new(324, 364)
+MenuIcon.ImageRectSize = Vector2.new(36, 36)
+MenuIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+MenuIcon.BackgroundTransparency = 1
+MenuIcon.Parent = TopBar
+
+-- Título
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -60, 1, 0)
+Title.Position = UDim2.new(0, 60, 0, 0)
+Title.Text = "🏢 Prison Life Aimbot"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+-- Subtítulo
+local Subtitle = Instance.new("TextLabel")
+Subtitle.Size = UDim2.new(1, -60, 0, 20)
+Subtitle.Position = UDim2.new(0, 60, 0, 30)
+Subtitle.Text = "by ScriptExclusives"
+Subtitle.TextColor3 = Color3.fromRGB(255, 240, 200)
+Subtitle.BackgroundTransparency = 1
+Subtitle.Font = Enum.Font.Gotham
+Subtitle.TextSize = 12
+Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+Subtitle.Parent = TopBar
+
+-- ================= SEÇÃO PRINCIPAL =================
+
+local MainSection = Instance.new("Frame")
+MainSection.Size = UDim2.new(1, -30, 1, -130)
+MainSection.Position = UDim2.new(0, 15, 0, 70)
+MainSection.BackgroundTransparency = 1
+MainSection.Parent = MainFrame
+
+-- ================= BOTÃO TEAM CHECK =================
+
+local TeamCheckSection = Instance.new("Frame")
+TeamCheckSection.Size = UDim2.new(1, 0, 0, 100)
+TeamCheckSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+TeamCheckSection.BorderSizePixel = 1
+TeamCheckSection.BorderColor3 = COLORS.Border
+TeamCheckSection.Parent = MainSection
+
+local TeamCheckSectionCorner = Instance.new("UICorner")
+TeamCheckSectionCorner.CornerRadius = UDim.new(0, 12)
+TeamCheckSectionCorner.Parent = TeamCheckSection
+
+-- Ícone do Team Check
+local TeamCheckIcon = Instance.new("ImageLabel")
+TeamCheckIcon.Size = UDim2.new(0, 50, 0, 50)
+TeamCheckIcon.Position = UDim2.new(0, 15, 0.5, -25)
+TeamCheckIcon.Image = "rbxassetid://3926305904"
+TeamCheckIcon.ImageRectOffset = Vector2.new(724, 724)
+TeamCheckIcon.ImageRectSize = Vector2.new(36, 36)
+TeamCheckIcon.ImageColor3 = COLORS.TeamCheckOn
+TeamCheckIcon.BackgroundTransparency = 1
+TeamCheckIcon.Parent = TeamCheckSection
+
+-- Botão Team Check
+TeamCheckButton = Instance.new("TextButton")
+TeamCheckButton.Size = UDim2.new(1, -90, 0, 50)
+TeamCheckButton.Position = UDim2.new(0, 80, 0.5, -25)
+TeamCheckButton.Text = "✅ IGNORAR AMIGOS"
+TeamCheckButton.BackgroundColor3 = COLORS.TeamCheckOn
+TeamCheckButton.Font = Enum.Font.GothamBold
+TeamCheckButton.TextSize = 14
+TeamCheckButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TeamCheckButton.Parent = TeamCheckSection
+
+local TeamCheckButtonCorner = Instance.new("UICorner")
+TeamCheckButtonCorner.CornerRadius = UDim.new(0, 10)
+TeamCheckButtonCorner.Parent = TeamCheckButton
+
+-- Descrição Team Check
+local TeamCheckDescription = Instance.new("TextLabel")
+TeamCheckDescription.Size = UDim2.new(1, -20, 0, 20)
+TeamCheckDescription.Position = UDim2.new(0, 10, 1, 0)
+TeamCheckDescription.Text = "Evita que o aimbot mire em players do seu time"
+TeamCheckDescription.TextColor3 = COLORS.TextSecondary
+TeamCheckDescription.BackgroundTransparency = 1
+TeamCheckDescription.Font = Enum.Font.Gotham
+TeamCheckDescription.TextSize = 10
+TeamCheckDescription.Parent = TeamCheckSection
+
+-- ================= BOTÃO TOGGLE AIMBOT =================
+
+local ToggleSection = Instance.new("Frame")
+ToggleSection.Size = UDim2.new(1, 0, 0, 100)
+ToggleSection.Position = UDim2.new(0, 0, 0, 120)
+ToggleSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ToggleSection.BorderSizePixel = 1
+ToggleSection.BorderColor3 = COLORS.Border
+ToggleSection.Parent = MainSection
+
+local ToggleSectionCorner = Instance.new("UICorner")
+ToggleSectionCorner.CornerRadius = UDim.new(0, 12)
+ToggleSectionCorner.Parent = ToggleSection
+
+-- Ícone do aimbot
+local AimbotIcon = Instance.new("ImageLabel")
+AimbotIcon.Size = UDim2.new(0, 50, 0, 50)
+AimbotIcon.Position = UDim2.new(0, 15, 0.5, -25)
+AimbotIcon.Image = "rbxassetid://3926305904"
+AimbotIcon.ImageRectOffset = Vector2.new(964, 324)
+AimbotIcon.ImageRectSize = Vector2.new(36, 36)
+AimbotIcon.ImageColor3 = COLORS.Accent
+AimbotIcon.BackgroundTransparency = 1
+AimbotIcon.Parent = ToggleSection
+
+-- Botão Aimbot
+ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(1, -90, 0, 50)
+ToggleButton.Position = UDim2.new(0, 80, 0.5, -25)
+ToggleButton.Text = "🔒 AIMBOT DESATIVADO"
+ToggleButton.BackgroundColor3 = COLORS.ButtonOff
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 14
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Parent = ToggleSection
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 10)
+ButtonCorner.Parent = ToggleButton
+
+-- Descrição Aimbot
+local ToggleDescription = Instance.new("TextLabel")
+ToggleDescription.Size = UDim2.new(1, -20, 0, 20)
+ToggleDescription.Position = UDim2.new(0, 10, 1, 0)
+ToggleDescription.Text = "Pressione V para ativar/desativar rapidamente"
+ToggleDescription.TextColor3 = COLORS.TextSecondary
+ToggleDescription.BackgroundTransparency = 1
+ToggleDescription.Font = Enum.Font.Gotham
+ToggleDescription.TextSize = 10
+ToggleDescription.Parent = ToggleSection
+
+-- ================= CONTROLE DE FOV =================
+
+local FovSection = Instance.new("Frame")
+FovSection.Size = UDim2.new(1, 0, 0, 110)
+FovSection.Position = UDim2.new(0, 0, 0, 240) -- Ajustada posição
+FovSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+FovSection.BorderSizePixel = 1
+FovSection.BorderColor3 = COLORS.Border
+FovSection.Parent = MainSection
+
+local FovSectionCorner = Instance.new("UICorner")
+FovSectionCorner.CornerRadius = UDim.new(0, 12)
+FovSectionCorner.Parent = FovSection
+
+-- Cabeçalho FOV
+local FovHeader = Instance.new("TextLabel")
+FovHeader.Size = UDim2.new(1, -20, 0, 30)
+FovHeader.Position = UDim2.new(0, 15, 0, 0)
+FovHeader.Text = "🎯 CAMPO DE VISÃO"
+FovHeader.TextColor3 = COLORS.Text
+FovHeader.BackgroundTransparency = 1
+FovHeader.Font = Enum.Font.GothamBold
+FovHeader.TextSize = 14
+FovHeader.TextXAlignment = Enum.TextXAlignment.Left
+FovHeader.Parent = FovSection
+
+-- Valor FOV
+local FovValue = Instance.new("TextLabel")
+FovValue.Size = UDim2.new(0, 50, 0, 30)
+FovValue.Position = UDim2.new(1, -65, 0, 0)
+FovValue.Text = FOV
+FovValue.TextColor3 = COLORS.Accent
+FovValue.BackgroundTransparency = 1
+FovValue.Font = Enum.Font.GothamBold
+FovValue.TextSize = 16
+FovValue.Parent = FovSection
+
+-- Barra de FOV
+local FovBar = Instance.new("Frame")
+FovBar.Size = UDim2.new(1, -30, 0, 10)
+FovBar.Position = UDim2.new(0, 15, 0, 45)
+FovBar.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+FovBar.Parent = FovSection
+
+local BarCorner = Instance.new("UICorner")
+BarCorner.CornerRadius = UDim.new(1, 0)
+BarCorner.Parent = FovBar
+
+local FovFill = Instance.new("Frame")
+FovFill.Size = UDim2.new(FOV/100, 0, 1, 0)
+FovFill.BackgroundColor3 = COLORS.Accent
+FovFill.Parent = FovBar
+
+local FillCorner = Instance.new("UICorner")
+FillCorner.CornerRadius = UDim.new(1, 0)
+FillCorner.Parent = FovFill
+
+-- Bolinha do slider
+local SliderKnob = Instance.new("Frame")
+SliderKnob.Size = UDim2.new(0, 20, 0, 20)
+SliderKnob.Position = UDim2.new(FOV/100, -10, 0.5, -10)
+SliderKnob.BackgroundColor3 = COLORS.Secondary
+SliderKnob.BorderSizePixel = 0
+SliderKnob.Parent = FovBar
+
+local KnobCorner = Instance.new("UICorner")
+KnobCorner.CornerRadius = UDim.new(1, 0)
+KnobCorner.Parent = SliderKnob
+
+-- Marcadores
+local MarkersContainer = Instance.new("Frame")
+MarkersContainer.Size = UDim2.new(1, -30, 0, 20)
+MarkersContainer.Position = UDim2.new(0, 15, 0, 60)
+MarkersContainer.BackgroundTransparency = 1
+MarkersContainer.Parent = FovSection
+
+for i = 0, 100, 25 do
+    local Marker = Instance.new("TextLabel")
+    Marker.Size = UDim2.new(0, 20, 1, 0)
+    Marker.Position = UDim2.new(i/100, -10, 0, 0)
+    Marker.Text = tostring(i)
+    Marker.TextColor3 = COLORS.TextSecondary
+    Marker.BackgroundTransparency = 1
+    Marker.Font = Enum.Font.Gotham
+    Marker.TextSize = 10
+    Marker.Parent = MarkersContainer
+end
+
+-- Descrição FOV
+local FovDescription = Instance.new("TextLabel")
+FovDescription.Size = UDim2.new(1, -20, 0, 20)
+FovDescription.Position = UDim2.new(0, 10, 1, -25)
+FovDescription.Text = "Ajuste o campo de visão do aimbot"
+FovDescription.TextColor3 = COLORS.TextSecondary
+FovDescription.BackgroundTransparency = 1
+FovDescription.Font = Enum.Font.Gotham
+FovDescription.TextSize = 10
+FovDescription.Parent = FovSection
+
+-- ================= ÁREA DE ARRASTE =================
+
+local DragSection = Instance.new("Frame")
+DragSection.Size = UDim2.new(1, -30, 0, 50)
+DragSection.Position = UDim2.new(0, 15, 1, -65)
+DragSection.BackgroundColor3 = COLORS.DragArea
+DragSection.BorderSizePixel = 0
+DragSection.Parent = MainFrame
+
+local DragCorner = Instance.new("UICorner")
+DragCorner.CornerRadius = UDim.new(0, 12)
+DragCorner.Parent = DragSection
+
+local DragIcon = Instance.new("ImageLabel")
+DragIcon.Size = UDim2.new(0, 25, 0, 25)
+DragIcon.Position = UDim2.new(0, 15, 0.5, -12.5)
+DragIcon.Image = "rbxassetid://3926305904"
+DragIcon.ImageRectOffset = Vector2.new(844, 164)
+DragIcon.ImageRectSize = Vector2.new(36, 36)
+DragIcon.BackgroundTransparency = 1
+DragIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+DragIcon.Parent = DragSection
+
+local DragLabel = Instance.new("TextLabel")
+DragLabel.Size = UDim2.new(1, -55, 1, 0)
+DragLabel.Position = UDim2.new(0, 50, 0, 0)
+DragLabel.Text = "ARRASTE AQUI PARA MOVER"
+DragLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+DragLabel.BackgroundTransparency = 1
+DragLabel.Font = Enum.Font.GothamBold
+DragLabel.TextSize = 12
+DragLabel.TextXAlignment = Enum.TextXAlignment.Left
+DragLabel.Active = true
+DragLabel.Parent = DragSection
+
+-- ================= INTERAÇÕES DOS BOTÕES =================
+
+-- Efeito hover no botão Team Check
+TeamCheckButton.MouseEnter:Connect(function()
+    local tween = TweenService:Create(TeamCheckButton, TweenInfo.new(0.2), {
+        BackgroundTransparency = 0.1
+    })
+    tween:Play()
+end)
+
+TeamCheckButton.MouseLeave:Connect(function()
+    local tween = TweenService:Create(TeamCheckButton, TweenInfo.new(0.2), {
+        BackgroundTransparency = 0
+    })
+    tween:Play()
+end)
+
+TeamCheckButton.MouseButton1Click:Connect(toggleTeamCheck)
+
+-- Efeito hover no botão Aimbot
+ToggleButton.MouseEnter:Connect(function()
+    local tween = TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
+        BackgroundTransparency = 0.1
+    })
+    tween:Play()
+end)
+
+ToggleButton.MouseLeave:Connect(function()
+    local tween = TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
+        BackgroundTransparency = 0
+    })
+    tween:Play()
+end)
+
+ToggleButton.MouseButton1Click:Connect(toggle)
+
+-- ================= SLIDER DE FOV =================
+
+local sliding = false
+
+FovBar.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1
+    or i.UserInputType == Enum.UserInputType.Touch then
+        sliding = true
+        
+        -- Animação do knob
+        local tween = TweenService:Create(SliderKnob, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 25, 0, 25),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        })
+        tween:Play()
+    end
+end)
+
+UIS.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1
+    or i.UserInputType == Enum.UserInputType.Touch then
+        sliding = false
+        
+        -- Retorna à cor normal
+        local tween = TweenService:Create(SliderKnob, TweenInfo.new(0.2), {
+            Size = UDim2.new(0, 20, 0, 20),
+            BackgroundColor3 = COLORS.Secondary
+        })
+        tween:Play()
+    end
+end)
+
+UIS.InputChanged:Connect(function(i)
+    if sliding and (
+        i.UserInputType == Enum.UserInputType.MouseMovement
+        or i.UserInputType == Enum.UserInputType.Touch
+    ) then
+        local x = math.clamp((i.Position.X - FovBar.AbsolutePosition.X) / FovBar.AbsoluteSize.X, 0, 1)
+        FOV = math.floor(x * 100)
+        FovFill.Size = UDim2.new(x, 0, 1, 0)
+        SliderKnob.Position = UDim2.new(x, -10, 0.5, -10)
+        FovValue.Text = tostring(FOV)
+        
+        -- Animação suave do valor
+        local tween = TweenService:Create(FovValue, TweenInfo.new(0.1), {
+            TextColor3 = COLORS.Secondary,
+            TextSize = 18
+        })
+        tween:Play()
+        wait(0.1)
+        local tween2 = TweenService:Create(FovValue, TweenInfo.new(0.2), {
+            TextColor3 = COLORS.Accent,
+            TextSize = 16
+        })
+        
